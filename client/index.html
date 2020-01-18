@@ -1,0 +1,358 @@
+<html>
+<head>
+
+ <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+</head>
+
+<body style="text-align:center; cursor: crosshair; background-color: black; background-size:100%;" background = '/img/canvasBG.gif' style = style = "font-family:georgia,garamond,serif;font-size:16px;font-style:italic;">
+
+<div id="signDiv" width="1300px" height="670px" style=" margin-top: 200px; text-align:right; display:inline-block; border:8px solid black; border-radius: 100%; background-color: white; opacity: .5;">
+<br>
+<div  style ="width:500px; height:200px; background-color: white; opacity: .9; border-radius: 100%; text-align:center; margin-top: 50px; font-weight:bold; font-size: 28px;" >
+Username:  <input id="signDiv-username" type="text"  style="width: 160px; padding: 2px;background-color: white; "></input> <br><br>
+Password:  <input id="signDiv-password" type="password" style="width: 160px; padding: 2px; background-color: white;"></input><br><br>
+<button id="signDiv-signIn" style="width: 100px; border:1px solid black; border-radius: 100%; font-weight:bold; font-size: 12px;" >Sign In</button>
+<button id="signDiv-signUp" style="width: 100px; border:1px solid black; border-radius: 100%; font-weight:bold; font-size: 12px;" >Sign Up</button>
+</div>
+</div>
+
+<div id="gameDiv" width="1300" height="670" style="background:'/img/canvasBG.gif'; text-align:center; display:none;">
+<Canvas id="ctx" width="1300" height="600" style="border:1px solid black; background-color: black; "></canvas>
+
+
+  <div id="toolbar" style="opacity: .8; background-color: white; border:1px solid black; width:1300px; height:93px; text-align:left; display:inline-block;">
+    <div id ="chat-text" style="border:1px solid black; width:500px; height:70px; overflow-y:scroll; display:inline-block;">
+    </div>
+    <form id="chat-form">
+    <input id="chat-input" type="text" style="width:500px; border:1px solid black;" ></input>
+    </form>
+  </div>
+
+</div>
+
+</body>
+</html>
+
+<script src="/socket.io/socket.io.js"></script>
+
+<script>
+var WIDTH = 1300;
+var HEIGHT = 600;
+var socket = io();
+
+//////////
+//Sign in
+/////////////
+
+var signDiv = document.getElementById('signDiv');
+var signDivUsername = document.getElementById('signDiv-username');
+var signDivSignIn = document.getElementById('signDiv-signIn');
+var signDivSignUp = document.getElementById('signDiv-signUp');
+var signDivPassword = document.getElementById('signDiv-password');
+
+signDivSignIn.onclick = function(){
+  socket.emit('signIn', {username:signDivUsername.value,password:signDivPassword.value});
+}
+signDivSignUp.onclick = function(){
+  socket.emit('signUp', {username:signDivUsername.value,password:signDivPassword.value});
+}
+socket.on('signInResponse', function(data){
+  if (data.success){
+      signDiv.style.display = 'none';
+      gameDiv.style.display = 'inline-block';
+  } else {
+    alert("Sign in unsuccesful: INCORRECT USERNAME OR PASSWORD");
+  }
+});
+
+socket.on('signUpResponse', function(data){
+  if (data.success){
+      alert("Sign Up Succesful: YOU ARE ABLE TO LOGIN NOW");
+  } else {
+    alert("Sign Up Unsuccesful: USERNAME ALREADY TAKEN");
+  }
+});
+
+/////////
+//GAME
+/////////////////
+var Img = {};
+
+Img.player = new Image();
+Img.player.src = '/img/playerTexture_1_SpriteSheet.gif';
+Img.bullet = new Image();
+Img.bullet.src = '/img/plasmaball_2.gif';
+Img.map = new Image();
+Img.map.src = '/img/map5.gif';
+
+var ctx = document.getElementById("ctx").getContext("2d");
+ctx.font = '30px Arial';
+
+var Player = function(initPack){
+  var self = {};
+  self.id = initPack.id;
+  self.number = initPack.number;
+  self.x = initPack.x;
+  self.y = initPack.y;
+  self.hp = initPack.hp;
+  self.hpMax = initPack.hpMax;
+  self.score = initPack.score;
+  self.deaths= initPack.deaths;
+
+  self.username;
+
+  self.draw = function(){
+    var x = self.x - Player.list[selfId].x + WIDTH/2;
+    var y = self.y - Player.list[selfId].y + HEIGHT/2;
+    //draw hp bar
+    var hpWidth = 80 * self.hp / self.hpMax;
+    var hpMax = 80;
+    ctx.fillStyle = 'black';
+    ctx.fillRect(x - hpMax+40, y+80 , hpMax, 6);// hp bar
+    ctx.fillStyle = 'red';
+    ctx.fillRect(x - hpWidth+40, y+80 , hpWidth, 6);// hp bar
+
+    //draw player
+    var width = Img.player.width;
+    var height = Img.player.height;
+
+
+    ctx.drawImage(Img.player,0,0,Img.player.width/2,Img.player.height,
+      x-width/2,y-height+180,width,height);
+
+    //draw mobile buttons
+    ctx.fillStyle = 'rgba(225,225,225,0.2)';
+    ctx.fillRect(25,475 , 100, 100);//button1
+    ctx.fillRect(150, 475, 100, 100);// button2
+    ctx.fillRect(1050, 475 , 100, 100);// button3
+    ctx.fillRect(1175, 475 , 100, 100);//button4
+
+    ctx.fillStyle = 'rgba(200,200,200,0.4)';
+    ctx.fillText('JUMP',32,540);
+    ctx.fillText('BLOCK',150,540);
+    ctx.fillText('ATK 1',1060,540);
+    ctx.fillText('ATK 2',1185,540);
+
+
+
+  }
+  Player.list[self.id] = self;
+  return self;
+}
+
+Player.list = {};
+
+var Bullet = function(initPack){
+  var self = {};
+  self.id = initPack.id;
+  self.number = initPack.number;
+  self.x = initPack.x;
+  self.y = initPack.y;
+
+
+  self.draw = function(){
+    var width = Img.bullet.width/2;
+    var height = Img.bullet.height/2;
+
+    var x = self.x - Player.list[selfId].x + WIDTH/2;
+    var y = self.y - Player.list[selfId].y + HEIGHT/2;
+
+    ctx.drawImage(Img.bullet,0,0,16,16,
+      x-width,y-height+140,width,height);
+  }
+
+  Bullet.list[self.id] = self;
+  return self;
+}
+Bullet.list = {};
+//init package
+var selfId = null;
+
+
+socket.on('init', function(data){
+  if (data.selfId){
+    selfId = data.selfId;
+  }
+    for (var i = 0; i < data.player.length; i++){
+    new Player(data.player[i]);
+  }
+    for (var i = 0; i < data.bullet.length; i++){
+      new Bullet(data.bullet[i]);
+    }
+});
+
+//update package
+socket.on('update', function(data){
+    for (var i = 0 ; i<data.player.length; i++){
+      var pack = data.player[i];
+      var p = Player.list[pack.id];
+      if(p){
+       if(pack.x !== undefined)
+        p.x = pack.x;
+       if(pack.y !== undefined)
+        p.y = pack.y;
+        if(pack.hp !== undefined)
+         p.hp = pack.hp;
+        if(pack.score !== undefined)
+         p.score = pack.score;
+         if(pack.deaths !== undefined)
+          p.deaths = pack.deaths;
+      }
+   }
+   for (var i = 0 ; i<data.bullet.length; i++){
+     var pack = data.bullet[i];
+     var b = Bullet.list[data.bullet[i].id];
+      if(b){
+        if(pack.x !== undefined)
+       b.x = pack.x;
+       if(pack.y !== undefined)
+       b.y = pack.y;
+     }
+    }
+});
+//remove package
+socket.on('remove', function(data){
+    for (var i = 0; i < data.player.length; i++){
+    delete Player.list[data.player[i]];
+  }
+    for (var i = 0; i < data.bullet.length; i++){
+      delete Bullet.list[data.bullet[i]];
+    }
+});
+
+
+
+setInterval(function(){
+  if (!selfId)
+        return;
+    ctx.clearRect(0,0,1300,600);
+    drawMap();
+    drawScore();
+    for (var i in Player.list)
+        Player.list[i].draw();
+    for (var i in Bullet.list)
+        Bullet.list[i].draw();
+},40);
+
+var drawMap = function(){
+  var y = WIDTH/2- Player.list[selfId].x;
+
+  var x = HEIGHT/2 - Player.list[selfId].y;
+
+
+
+ctx.drawImage(Img.map,y,x+180);
+
+
+
+}
+
+var drawScore = function(){
+  ctx.fillStyle = 'white';
+  ctx.fillText(' Kills: ' + Player.list[selfId].score,0,30);
+  ctx.fillStyle = 'white';
+  ctx.fillText(' Deaths: ' + Player.list[selfId].deaths,0,60);
+}
+
+//IN GAME CHAT
+var chatText = document.getElementById('chat-text');
+var chatInput = document.getElementById('chat-input');
+var chatForm = document.getElementById('chat-form');
+
+socket.on('addToChat', function(data){
+  chatText.innerHTML = '<div>' + data + '</div>' + chatText.innerHTML;
+});
+
+socket.on('evalAnswer', function(data){
+  console.log(data);
+});
+
+chatForm.onsubmit = function(e){
+  e.preventDefault();
+  if (chatInput.value[0] === '/'){
+    socket.emit('evalServer', chatInput.value.slice(1));
+  }
+    else if(chatInput.value[0] === '@'){
+      socket.emit('sendPmToServer', {
+        username:chatInput.value.slice(1,chatInput.value.indexOf(',')),
+         message:chatInput.value.slice(chatInput.value.indexOf(',') +1),
+      });
+
+    } else{
+    socket.emit('sendMsgToServer', chatInput.value);
+  }
+  chatInput.value = '';
+
+}
+
+document.onkeydown = function(event){
+  if(event.keyCode === 68) //d
+    socket.emit('keyPress', {inputId:'right',state:true});
+  else if(event.keyCode === 83) //d
+    socket.emit('keyPress', {inputId:'down',state:true});
+  else if(event.keyCode === 65) //d
+    socket.emit('keyPress', {inputId:'left',state:true});
+  else if(event.keyCode === 87) //d
+    socket.emit('keyPress', {inputId:'up',state:true});
+    else if(event.keyCode === 81) //d
+      socket.emit('keyPress', {inputId:'attack2',state:true});
+}
+
+document.onkeyup = function(event){
+  if(event.keyCode === 68) //d
+    socket.emit('keyPress', {inputId:'right',state:false});
+  else if(event.keyCode === 83) //d
+    socket.emit('keyPress', {inputId:'down',state:false});
+  else if(event.keyCode === 65) //d
+    socket.emit('keyPress', {inputId:'left',state:false});
+  else if(event.keyCode === 87) //d
+    socket.emit('keyPress', {inputId:'up',state:false});
+    else if(event.keyCode === 81) //q
+      socket.emit('keyPress', {inputId:'attack2',state:false});
+}
+
+document.onmousedown = function(event){
+  socket.emit('keyPress', {inputId:'attack',state:true});
+}
+document.onmouseup = function(event){
+  socket.emit('keyPress', {inputId:'attack',state:false});
+}
+document.onmousemove = function(event){
+  var x = event.clientX - 650-50;
+  var y = event.clientY - 300-50;
+  var angle = Math.atan2(y,x) / Math.PI * 180;
+
+socket.emit('keyPress', {inputId:'mouseAngle',state:angle});
+
+}
+
+document.touchEnd  = function(event){
+  event.preventDefault();
+    socket.emit('keyPress', {inputId:'right',state:false});
+    socket.emit('keyPress', {inputId:'left',state:false});
+
+}
+document.touchMove = function(event){
+  event.preventDefault();
+}
+document.touchStart = function(event){
+  event.preventDefault();
+
+  if (event.touches[0].clientX < Player.list[selfId].x){
+    socket.emit('keyPress', {inputId:'left',state:true});
+  }
+  else if (event.touches[0].clientX > Player.list[selfId].x){
+    socket.emit('keyPress', {inputId:'right',state:true});
+  }
+
+}
+
+
+
+document.oncontextmenu = function(event){
+  event.preventDefault();
+}
+
+
+
+</script>
