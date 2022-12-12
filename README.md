@@ -1,2 +1,2 @@
 # Online-Multiplayer-Platform-Fighter
-this unnamed game is an Online Multiplayer 2d platform style fighter.   This project is still in progress.
+This is a game engine that supports online multiplyer support using node as the server and mogodb for user account data.
